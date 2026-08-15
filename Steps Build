@@ -1,0 +1,131 @@
+Viewed setup_pi_environment.sh:1-47
+Viewed micro_xrce_agent.service:1-14
+
+Sıfırdan Ubuntu kurulumundan başlayıp Pixhawk bağlantısına ve kodun çalıştırılmasına kadar tüm süreci **adım adım** aşağıda bulabilirsiniz.
+
+---
+
+### 📌 Adım 1: Ubuntu Üzerine ROS 2 Humble Kurulumu
+
+*(İşletim sisteminiz Ubuntu 22.04 LTS olmalıdır).*
+
+1. **Sistem Dil / Locale Ayarlarını Yapın:**
+   ```bash
+   sudo apt update && sudo apt install -y locale
+   sudo locale-gen en_US en_US.UTF-8
+   sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+   export LANG=en_US.UTF-8
+   ```
+
+2. **ROS 2 Depolarını Ekleyin:**
+   ```bash
+   sudo apt install -y software-properties-common curl
+   sudo add-apt-repository universe
+   sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+   ```
+
+3. **ROS 2 Paketlerini ve Gerekli Kütüphaneleri Yükleyin:**
+   ```bash
+   sudo apt update
+   sudo apt install -y ros-humble-ros-base python3-colcon-common-extensions python3-rosdep python3-pip python3-opencv ros-humble-cv-bridge ros-humble-sensor-msgs ros-humble-geometry-msgs ros-humble-std-msgs ros-humble-nav-msgs ros-humble-px4-msgs git cmake build-essential
+   ```
+
+4. **ROS 2 Ortam Değişkenini Bash'e Ekleyin:**
+   ```bash
+   echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+   source ~/.bashrc
+   ```
+
+---
+
+### 📌 Adım 2: Pixhawk İletişimi İçin Micro-XRCE-DDS Agent Kurulumu
+
+Pixhawk (PX4) ile Ubuntu (ROS 2) arasındaki haberleşmeyi sağlayan aracı kuruyoruz:
+
+1. **Micro-XRCE-DDS Agent'ı İndirin ve Derleyin:**
+   ```bash
+   cd ~
+   git clone https://github.com/eProsima/Micro-XRCE-DDS-Agent.git
+   cd Micro-XRCE-DDS-Agent
+   mkdir build && cd build
+   cmake ..
+   make -j$(nproc)
+   sudo make install
+   sudo ldconfig
+   ```
+
+2. **Seri Port Yetkisini Verin:**
+   Ubuntu kullanıcısının Pixhawk USB/Serial portuna erişebilmesi için `dialout` grubuna ekliyoruz:
+   ```bash
+   sudo usermod -a -G dialout $USER
+   ```
+   *(Bu komuttan sonra oturumu kapatıp açmanız veya bilgisayarı yeniden başlatmanız gerekebilir).*
+
+---
+
+### 📌 Adım 3: Pixhawk (PX4) Parametre Ayarları
+
+Pixhawk tarafında Micro-XRCE-DDS yayınını açmak gerekir (QGroundControl üzerinden yapılır):
+
+1. Pixhawk'ı USB ile bilgisayara bağlayın ve **QGroundControl** uygulamasını açın.
+2. **Vehicle Setup -> Parameters** bölümüne gidin.
+3. Şu parametreleri ayarlayın:
+   * `UXRCE_DDS_CFG`: **TELEM2** (veya hangi porttan bağladıysanız, örn: TELEM1 / FTDI USB ise `101`)
+   * `SER_TEL2_BAUD`: **921600** (Baud rate 921600 olmalı)
+4. Pixhawk'ı **Yeniden Başlatın (Reboot)**.
+
+---
+
+### 📌 Adım 4: Kablo Bağlantıları ve Ajanın Başlatılması
+
+1. **Fiziksel Bağlantı:**
+   * **FTDI USB Çevirici Kullanıyorsanız:** Pixhawk TELEM2 portunu FTDI dönüştürücü ile Ubuntu bilgisayarın USB portuna takın (genellikle kablo yolu `/dev/ttyUSB0` olur).
+   * **Raspberry Pi GPIO (UART) Kullanıyorsanız:** Pixhawk TELEM2 (TX/RX/GND) -> Pi GPIO TX/RX/GND (Kablo yolu `/dev/ttyAMA0` olur).
+
+2. **Micro-XRCE-DDS Agent'ı Çalıştırarak Bağlantıyı Test Edin:**
+   *(USB çevirici kullanıyorsanız ttyUSB0, Pi GPIO kullanıyorsanız ttyAMA0 yazın)*
+   ```bash
+   MicroXRCEAgent serial --dev /dev/ttyUSB0 -b 921600
+   ```
+   *Ekranda `[PX4] Client connected!` yazısını görüyorsanız Pixhawk ile Ubuntu haberleşiyor demektir.*
+
+---
+
+### 📌 Adım 5: Kodların (ROS 2 Workspace) Derlenmesi ve Çalıştırılması
+
+1. **Proje Klasörüne Gidin:**
+   ```bash
+   cd ~/Downloads/rovtasks/ros2_ws
+   ```
+
+2. **Paketi Derleyin:**
+   ```bash
+   colcon build --packages-select rov_line_tracking
+   ```
+
+3. **Workspace Ortamını Yükleyin:**
+   ```bash
+   source install/setup.bash
+   ```
+
+4. **Sistemi Başlatın (Launch):**
+   *Ayrı bir terminalde `MicroXRCEAgent` çalışır durumdayken yeni bir terminalde şu komutu çalıştırın:*
+   ```bash
+   ros2 launch rov_line_tracking line_tracking.launch.py
+   ```
+
+---
+
+### 📌 Adım 6: Bağlantının Doğrulanması (Kontrol Adımı)
+
+Başka bir terminal açıp şu komutları vererek verilerin akıp akmadığını kontrol edebilirsiniz:
+
+1. **Pixhawk'tan Gelen Verileri Görmek İçin:**
+   ```bash
+   ros2 topic echo /fmu/out/vehicle_odometry
+   ```
+2. **Kamera Görüntü Sapma Hatasını Görmek İçin:**
+   ```bash
+   ros2 topic echo /vision/line_error
+   ```
