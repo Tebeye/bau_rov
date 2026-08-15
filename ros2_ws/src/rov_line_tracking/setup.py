@@ -17,7 +17,7 @@ setup(
         (os.path.join('share', package_name, 'models/rov_model'), glob('models/rov_model/*')),
     ],
     install_requires=['setuptools'],
-    zip_safe=true,
+    zip_safe=True,
     maintainer='ROV Autonomous Team',
     maintainer_email='info@rov.local',
     description='Autonomous Underwater Vehicle (ROV) Line Tracking & Control Package for ROS 2 Humble',
