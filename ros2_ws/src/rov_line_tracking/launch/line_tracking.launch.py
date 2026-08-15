@@ -43,9 +43,24 @@ def generate_launch_description():
         }]
     )
 
+    mavros_node = Node(
+        package='mavros',
+        executable='mavros_node',
+        name='mavros',
+        output='screen',
+        parameters=[{
+            'fcu_url': 'serial:///dev/ttyAMA0:921600',
+            'gcs_url': 'udp://@localhost',
+            'target_system_id': 1,
+            'target_component_id': 1,
+            'fcu_protocol': 'v2.0',
+        }]
+    )
+
     return LaunchDescription([
         params_file_arg,
         use_sim_time_arg,
+        mavros_node,
         vision_node,
         control_node
     ])

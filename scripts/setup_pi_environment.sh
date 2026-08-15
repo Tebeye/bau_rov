@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# T-1.1 & T-1.3: Raspberry Pi 4/5 Ubuntu Server 22.04 LTS Setup & Micro-XRCE-DDS Agent
+# T-1.1 & T-1.3: Raspberry Pi 4/5 Ubuntu Server 22.04 LTS Setup & MAVROS
 # ==============================================================================
 set -e
 
@@ -22,23 +22,10 @@ sudo apt install -y \
     ros-humble-geometry-msgs \
     ros-humble-std-msgs \
     ros-humble-nav-msgs \
-    ros-humble-px4-msgs
+    ros-humble-mavros \
+    ros-humble-mavros-extras
 
-echo "[+] Building eProsima Micro-XRCE-DDS-Agent..."
-WORKSPACE_DIR="$HOME/micro_xrce_agent_ws"
-mkdir -p "$WORKSPACE_DIR"
-cd "$WORKSPACE_DIR"
 
-if [ ! -d "Micro-XRCE-DDS-Agent" ]; then
-    git clone https://github.com/eProsima/Micro-XRCE-DDS-Agent.git
-fi
-
-cd Micro-XRCE-DDS-Agent
-mkdir -p build && cd build
-cmake ..
-make -j$(nproc)
-sudo make install
-sudo ldconfig
 
 echo "[+] Configuring serial port permissions..."
 sudo usermod -a -G dialout $USER

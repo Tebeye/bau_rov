@@ -16,7 +16,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64
 from geometry_msgs.msg import Wrench
-from px4_msgs.msg import VehicleOdometry, VehicleRatesSetpoint, OffboardControlMode
+from nav_msgs.msg import Odometry
+from mavros_msgs.msg import AttitudeTarget
 from rov_line_tracking.fail_safe import FailSafeManager, SystemState
 import math
 
@@ -118,10 +119,10 @@ class ControlNode(Node):
         self.line_error = float('nan')
 
         # Subscriptions
-        # Subscribes to PX4 vehicle odometry (Pixhawk TELEM2 via Micro XRCE-DDS)
+        # Subscribes to PX4 vehicle odometry (Pixhawk TELEM2 via MAVROS)
         self.odom_sub = self.create_subscription(
-            VehicleOdometry,
-            '/fmu/out/vehicle_odometry',
+            Odometry,
+            '/mavros/local_position/odom',
             self.odom_callback,
             10
         )
@@ -138,9 +139,8 @@ class ControlNode(Node):
         # Generic ROS Wrench publisher
         self.wrench_pub = self.create_publisher(Wrench, '/control/wrench_command', 10)
 
-        # PX4 microXRCE-DDS Publishers (T-4.5)
-        self.rates_setpoint_pub = self.create_publisher(VehicleRatesSetpoint, '/fmu/in/vehicle_rates_setpoint', 10)
-        self.offboard_mode_pub = self.create_publisher(OffboardControlMode, '/fmu/in/offboard_control_mode', 10)
+        # PX4 MAVROS Publishers (T-4.5)
+        self.attitude_target_pub = self.create_publisher(AttitudeTarget, '/mavros/setpoint_raw/attitude', 10)
 
         # T-4.1: Asynchronous timer operating at 10 Hz
         timer_period = 1.0 / loop_freq
@@ -148,25 +148,18 @@ class ControlNode(Node):
 
         self.get_logger().info(f"Control Node running at {loop_freq} Hz. Target Depth: {self.target_depth}m (±{self.depth_tolerance*100:.0f}cm)")
 
-    def odom_callback(self, msg: VehicleOdometry):
+    def odom_callback(self, msg: Odometry):
         """Processes depth/odometry feedback from Pixhawk PX4."""
-        # VehicleOdometry position z in NED frame (depth is positive Z in NED or negative Z in ENU)
-        self.current_depth = abs(float(msg.position[2]))
+        # Odometry position z (depth is usually negative Z in ENU frame in MAVROS)
+        self.current_depth = abs(float(msg.pose.pose.position.z))
 
     def line_error_callback(self, msg: Float64):
         """Processes centroid deviation error from vision_node."""
         self.line_error = msg.data
 
     def publish_offboard_heartbeat(self):
-        """PX4 offboard control mode heartbeat message."""
-        mode_msg = OffboardControlMode()
-        mode_msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
-        mode_msg.position = False
-        mode_msg.velocity = False
-        mode_msg.acceleration = False
-        mode_msg.attitude = False
-        mode_msg.body_rate = True
-        self.offboard_mode_pub.publish(mode_msg)
+        """MAVROS handles offboard heartbeat automatically when setpoints are published."""
+        pass
 
     def control_loop_callback(self):
         """T-4.1: 10 Hz Async Timer Main Control Loop."""
@@ -219,15 +212,16 @@ class ControlNode(Node):
         wrench_msg.torque.z = yaw_torque
         self.wrench_pub.publish(wrench_msg)
 
-        rates_msg = VehicleRatesSetpoint()
-        rates_msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
-        rates_msg.roll = 0.0
-        rates_msg.pitch = 0.0
-        rates_msg.yaw = float(yaw_torque)
-        rates_msg.thrust_body = [float(surge_force / self.max_surge_force),
-                                float(sway_force / self.max_sway_force),
-                                float(-heave_force / self.max_heave_force)]
-        self.rates_setpoint_pub.publish(rates_msg)
+        rates_msg = AttitudeTarget()
+        rates_msg.header.stamp = self.get_clock().now().to_msg()
+        rates_msg.type_mask = 7  # Ignore attitude (1+2+4), use body rates
+        rates_msg.body_rate.x = 0.0
+        rates_msg.body_rate.y = 0.0
+        rates_msg.body_rate.z = float(yaw_torque)
+        # MAVROS AttitudeTarget supports 1D thrust. For 3D thrust, additional MAVROS plugins or manual control might be needed.
+        # Here we map the heave force to the main throttle/thrust axis.
+        rates_msg.thrust = float(-heave_force / self.max_heave_force)
+        self.attitude_target_pub.publish(rates_msg)
 
         self.get_logger().debug(
             f"State: {system_state.name} | Depth: {self.current_depth:.2f}m (Heave F: {heave_force:.1f}N) | "
