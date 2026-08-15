@@ -1,0 +1,13 @@
+[Unit]
+Description=Micro-XRCE-DDS Agent for Pixhawk PX4 Communication
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+ExecStart=/usr/local/bin/MicroXRCEAgent serial --dev /dev/ttyAMA0 -b 921600
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,41 @@
+# ==============================================================================
+# ROV Line Tracking & Control System Parameters
+# ==============================================================================
+
+vision_node:
+  ros__parameters:
+    image_topic: "/camera/image_raw"
+    line_error_topic: "/vision/line_error"
+    adaptive_threshold_block_size: 19
+    adaptive_threshold_c: 5
+    min_contour_area: 500.0
+    image_width: 640
+    image_height: 480
+    debug_view: false
+
+control_node:
+  ros__parameters:
+    loop_frequency: 10.0  # Hz (T-4.1: 10 Hz async timer)
+    target_depth: 2.0     # meters (T-4.2: Hedef 2.0m)
+    depth_tolerance: 0.05 # ±5 cm precision
+
+    # Depth (Heave) PID Parameters
+    heave_kp: 4.0
+    heave_ki: 0.2
+    heave_kd: 1.5
+    max_heave_force: 7.0  # N (T-4.2 limit)
+
+    # Yaw (Heading) PID Parameters (from Line Centroid Error)
+    yaw_kp: 0.05
+    yaw_ki: 0.001
+    yaw_kd: 0.01
+    max_yaw_torque: 3.0   # Nm
+
+    # Velocity / Force Limits (T-4.4)
+    max_surge_force: 10.0 # N (Forward)
+    max_sway_force: 10.0  # N (Lateral)
+    default_surge_speed: 3.0 # N nominal forward thrust during tracking
+
+    # Fail-Safe & Dead Reckoning Settings (T-5.1 & T-5.2)
+    lost_line_timeout_count: 30 # 3 seconds at 10 Hz
+    emergency_ascent_force: 5.0 # Positive Heave force for surface ascent
