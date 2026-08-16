@@ -192,12 +192,12 @@ class ControlNode(Node):
 
         elif system_state == SystemState.SEARCH_MODE:
             # T-5.1: Dead Reckoning Search Pattern
-            self.get_logger().warn_throttle(2.0, "State: SEARCH MODE (Dead Reckoning)")
+            self.get_logger().warning("State: SEARCH MODE (Dead Reckoning)", throttle_duration_sec=2.0)
             surge_force, sway_force, yaw_torque = self.fail_safe.get_search_pattern_wrench(self.default_surge)
 
         elif system_state == SystemState.EMERGENCY_SURFACE:
             # T-5.2: Emergency surface procedure
-            self.get_logger().error_throttle(1.0, "State: EMERGENCY SURFACE ASCENT! Motors disarmed, surfacing...")
+            self.get_logger().error("State: EMERGENCY SURFACE ASCENT! Motors disarmed, surfacing...", throttle_duration_sec=1.0)
             surge_force, sway_force, yaw_torque, heave_force = self.fail_safe.get_emergency_surface_wrench()
 
         # T-4.4: Enforce Surge / Sway limits (Max 10 N)
